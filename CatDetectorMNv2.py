@@ -1,6 +1,7 @@
 import keras
 import cv2
 import argparse
+import time
 import numpy as np
 #from keras.applications.mobilenet_v2 import MobileNetV2 #size=(244, 244)
 #from keras.applications.mobilenet_v2 import preprocess_input, decode_predictions
@@ -8,8 +9,15 @@ import numpy as np
 #from keras.applications.xception import preprocess_input, decode_predictions
 from keras.applications.convnext import ConvNeXtLarge #size=(224, 224)
 from keras.applications.convnext import preprocess_input, decode_predictions
-from time import sleep
+#from time import sleep
 from pygame import mixer
+from collections import deque
+
+## CONSTANTS
+#TODO: make these command line arguments
+CLIP_LENGTH = 5
+FPS = 30
+BUFFER_LENGTH = int(CLIP_LENGTH * FPS)
 
 # Cat labels indexed by imagenet synset, with the leading 'n0' removed for integer comparison
 cat_labels = {
@@ -22,18 +30,20 @@ cat_labels = {
     2127052, #lynx
 }
 
-# Parse arguments
+# Parse command line arguments
 parser = argparse.ArgumentParser(description='Run cat detection software.')
 parser.add_argument('--sound', type=str, default="TrainHorn.mp3", help='Path to alarm sound file (default: TrainHorn.mp3)')
 args = parser.parse_args()
 
 # Initialize video and audio
+clip_buffer = deque(maxlen=BUFFER_LENGTH)
 video_stream = cv2.VideoCapture(0)
 mixer.init()
 alarm = mixer.Sound(args.sound)
+last_scan_time = time.time()
 
 # Live view window, uncomment 'cv2.imshow()' and 'cv2.destroyWindow()' below to enable
-#cv2.namedWindow("LiveView")
+cv2.namedWindow("LiveView")
 
 if video_stream.isOpened():
     rval, frame = video_stream.read()
@@ -51,36 +61,44 @@ base_model = ConvNeXtLarge(weights='imagenet')
 if rval:
     while True:
         rval, frame = video_stream.read()
+        cat_detected = False
 
-        if frame is None:
+        if not rval or frame is None:
             break
 
-        #cv2.imshow("LiveView", frame)
+        cv2.imshow("LiveView", frame)
 
-        # Preprocessing
-        x = keras.preprocessing.image.smart_resize(frame, imnet_size)
-        x = preprocess_input(keras.utils.img_to_array(x))
-        x = x[np.newaxis, 0:]
-        
-        predictions = base_model.predict(x)
-        predictions = decode_predictions(predictions, top=5)[0]
+        ## Detection logic
+        if time.time() - last_scan_time > CLIP_LENGTH:
+            last_scan_time = time.time()
+            # Preprocess frame to fit model input size
+            x = keras.preprocessing.image.smart_resize(frame, imnet_size)
+            x = preprocess_input(keras.utils.img_to_array(x))
+            x = x[np.newaxis, 0:]
+            
+            predictions = base_model.predict(x)
+            predictions = decode_predictions(predictions, top=5)[0]
 
-        #print("predictions: ")
-        for pred in predictions:
-            #print(pred[1], "w conf: ", pred[2], " id: ", pred[0])
+            #print("predictions: ")
+            for pred in predictions:
+                #print(pred[1], "w conf: ", pred[2], " id: ", pred[0])
 
-            imnet_id = int(pred[0][2:])
-            if imnet_id in cat_labels:
-                print("Cat detected!")
-                alarm.play()#maxtime=1850)
-                break
+                imnet_id = int(pred[0][2:])
+                if imnet_id in cat_labels:
+                    cat_detected = True
+                    break
 
+        ## Play alarm if cat is detected 
+        if cat_detected:
+            print("Cat detected!")
+            alarm.play()#maxtime=1850)
+
+        ## check for exit key
         # TODO: this does not work unless the live window is open
         key = cv2.waitKey(1)
         if key == 27: # exit on ESC
             break
-        sleep(10)
         
 
 video_stream.release()
-#cv2.destroyWindow("LiveView")
+cv2.destroyWindow("LiveView")
