@@ -9,7 +9,6 @@ import numpy as np
 #from keras.applications.xception import preprocess_input, decode_predictions
 from keras.applications.convnext import ConvNeXtLarge #size=(224, 224)
 from keras.applications.convnext import preprocess_input, decode_predictions
-#from time import sleep
 from pygame import mixer
 from collections import deque
 
