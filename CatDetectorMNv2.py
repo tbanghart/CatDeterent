@@ -17,6 +17,8 @@ from collections import deque
 CLIP_LENGTH = 5
 FPS = 30
 BUFFER_LENGTH = int(CLIP_LENGTH * FPS)
+#TODO: make a command line argument to enable/disable clip limits
+MAX_NUMBER_OF_CLIPS = 10
 
 # Cat labels indexed by imagenet synset, with the leading 'n0' removed for integer comparison
 cat_labels = {
@@ -40,6 +42,7 @@ video_stream = cv2.VideoCapture(0)
 mixer.init()
 alarm = mixer.Sound(args.sound)
 last_scan_time = time.time()
+num_clips = 0
 
 # Live view window, uncomment 'cv2.imshow()' and 'cv2.destroyWindow()' below to enable
 cv2.namedWindow("LiveView")
@@ -67,8 +70,11 @@ if rval:
 
         cv2.imshow("LiveView", frame)
 
+        clip_buffer.append(frame)
+
         ## Detection logic
         if time.time() - last_scan_time > CLIP_LENGTH:
+            cat_detected = True
             last_scan_time = time.time()
             # Preprocess frame to fit model input size
             x = keras.preprocessing.image.smart_resize(frame, imnet_size)
@@ -91,6 +97,18 @@ if rval:
         if cat_detected:
             print("Cat detected!")
             alarm.play()#maxtime=1850)
+
+            # Save clip
+            if (num_clips < MAX_NUMBER_OF_CLIPS):
+                num_clips += 1
+                clip_name = "Cat_" + time.ctime() + ".mp4"
+                clip_name = clip_name.replace(" ", "_")
+                clip_name = clip_name.replace(":", "-")
+                print("Saving clip to " + clip_name)
+                clip_stream = cv2.VideoWriter(clip_name, cv2.VideoWriter_fourcc(*'mp4v'), FPS, (frame.shape[1], frame.shape[0]))
+                for frame in clip_buffer:
+                    clip_stream.write(frame)
+                clip_stream.release()
 
         ## check for exit key
         # TODO: this does not work unless the live window is open
