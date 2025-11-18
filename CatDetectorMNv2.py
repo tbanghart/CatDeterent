@@ -74,7 +74,6 @@ if rval:
 
         ## Detection logic
         if time.time() - last_scan_time > CLIP_LENGTH:
-            cat_detected = True
             last_scan_time = time.time()
             # Preprocess frame to fit model input size
             x = keras.preprocessing.image.smart_resize(frame, imnet_size)
